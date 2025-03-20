@@ -15,7 +15,7 @@ from transformers.models.wav2vec2.modeling_wav2vec2 import (
 )
 from moviepy.video.io.VideoFileClip import VideoFileClip
 import torchaudio
-import face_recognition
+from deepface import DeepFace
 
 class ModelHead(nn.Module):
     r"""Classification head."""
@@ -198,45 +198,47 @@ def check_ai_generated(image, video):
         return ("Proceeding to next step.", f"Deepfake detection on frames completed {final_prediction}")
 
 
-# Face recognition integration
+# Face recognition integration with DeepFace
 def check_face_recognition(image, video):
-
     if isinstance(image, Image.Image):
-        # Convert the image to RGB (required for face_recognition)
-        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # Using DeepFace to detect faces
+        try:
+            analysis = DeepFace.analyze(image, actions=['face_detection'])
+            if len(analysis) == 0:
+                return (
+                "Aucun visage correct - Deepfake", "No clear faces detected")
 
-        # Detect faces in the image using face_recognition
-        face_locations = face_recognition.face_locations(rgb_image)
+            # Draw rectangles around faces (Optional visualization)
+            for face in analysis[0]['regions']:
+                print(f"Detected face at: {face}")
 
-        if len(face_locations) == 0:
-            return ("Aucun visage correct - Deepfake", "No clear faces detected")
-
-        # Draw rectangles around faces (Optional visualization)
-        for top, right, bottom, left in face_locations:
-            cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
-
-        # Return the number of faces detected
-        return ("Visage correct - Image réelle", f"Faces detected: {len(face_locations)}")
+            # Return the number of faces detected
+            return ("Visage correct - Image réelle",
+                    f"Faces detected: {len(analysis[0]['regions'])}")
+        except Exception as e:
+            return ("Error in face detection", str(e))
 
     if isinstance(video, str):  # Video input (file path)
         frames = extract_frames(video)
         face_locations = None  # Initialize the final prediction variable
 
         for frame in frames:
-            # Convert the image to RGB (required for face_recognition)
-            rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            try:
+                # Using DeepFace to detect faces
+                analysis = DeepFace.analyze(frame, actions=['face_detection'])
+                if len(analysis) == 0:
+                    return ("Aucun visage correct - Deepfake",
+                            "No clear faces detected")
 
-            # Detect faces in the image using face_recognition
-            face_locations = face_recognition.face_locations(rgb_image)
-            if len(face_locations) == 0:
-                return ("Aucun visage correct - Deepfake", "No clear faces detected")
+                # Draw rectangles around faces (Optional visualization)
+                for face in analysis[0]['regions']:
+                    print(f"Detected face at: {face}")
 
-            # Draw rectangles around faces (Optional visualization)
-            for top, right, bottom, left in face_locations:
-                cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
+                return ("Visage correct - Image réelle",
+                        f"Faces detected: {len(analysis[0]['regions'])}")
+            except Exception as e:
+                return ("Error in face detection", str(e))
 
-        # Return the number of faces detected
-        return ("Visage correct - Image réelle", f"Faces detected: {len(face_locations)}")
 
 
 # Step 3: Audio Deepfake Detection
