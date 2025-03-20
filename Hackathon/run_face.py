@@ -16,6 +16,9 @@ from transformers.models.wav2vec2.modeling_wav2vec2 import (
 from moviepy.video.io.VideoFileClip import VideoFileClip
 import torchaudio
 from deepface import DeepFace
+import matplotlib
+matplotlib.use('Agg')  # Or use 'TkAgg', if you're using an interactive environment
+from facenet_pytorch import MTCNN, InceptionResnetV1
 
 class ModelHead(nn.Module):
     r"""Classification head."""
@@ -198,47 +201,46 @@ def check_ai_generated(image, video):
         return ("Proceeding to next step.", f"Deepfake detection on frames completed {final_prediction}")
 
 
-# Face recognition integration with DeepFace
 def check_face_recognition(image, video):
+    # Initialize MTCNN for face detection and Inception Resnet V1 for face recognition
+    mtcnn = MTCNN(keep_all=True)
+    model = InceptionResnetV1(pretrained='vggface2').eval()
     if isinstance(image, Image.Image):
-        # Using DeepFace to detect faces
-        try:
-            analysis = DeepFace.analyze(image, actions=['face_detection'])
-            if len(analysis) == 0:
-                return (
-                "Aucun visage correct - Deepfake", "No clear faces detected")
+        # Convert PIL Image to OpenCV format
+        image = np.array(image)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-            # Draw rectangles around faces (Optional visualization)
-            for face in analysis[0]['regions']:
-                print(f"Detected face at: {face}")
+        # Detect faces in the image
+        faces, probs = mtcnn.detect(image)
 
-            # Return the number of faces detected
-            return ("Visage correct - Image réelle",
-                    f"Faces detected: {len(analysis[0]['regions'])}")
-        except Exception as e:
-            return ("Error in face detection", str(e))
+        if faces is None:
+            return "Aucun visage correct - Deepfake", "No clear faces detected"
+
+        # Return the number of faces detected
+        return "Visage correct - Image réelle", f"Faces detected: {len(faces)}"
 
     if isinstance(video, str):  # Video input (file path)
-        frames = extract_frames(video)
-        face_locations = None  # Initialize the final prediction variable
+        cap = cv2.VideoCapture(video)
+        frame_count = 0
+        face_count = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        for frame in frames:
-            try:
-                # Using DeepFace to detect faces
-                analysis = DeepFace.analyze(frame, actions=['face_detection'])
-                if len(analysis) == 0:
-                    return ("Aucun visage correct - Deepfake",
-                            "No clear faces detected")
+            # Detect faces in each frame
+            faces, probs = mtcnn.detect(frame)
 
-                # Draw rectangles around faces (Optional visualization)
-                for face in analysis[0]['regions']:
-                    print(f"Detected face at: {face}")
+            if faces is not None:
+                face_count += len(faces)
 
-                return ("Visage correct - Image réelle",
-                        f"Faces detected: {len(analysis[0]['regions'])}")
-            except Exception as e:
-                return ("Error in face detection", str(e))
+            frame_count += 1
 
+        cap.release()
+
+        return f"Faces detected in {face_count} frames", f"Number of faces detected: {face_count}"
+
+    return "No valid input", "Please provide a valid image or video"
 
 
 # Step 3: Audio Deepfake Detection
@@ -316,15 +318,15 @@ def deepfake_detector(image, video):
     if Source_check_result[0] != "Proceeding to next step.":
         return First_Message
     print(First_Message, "\n Proceeding to next step.")
-
+    Face_check_result = check_face_recognition(image, video)
+    First_Message["Third test - Face detection"] = Face_check_result[0]
     if isinstance(video, str):
         print("audio consulted")
         Audio_check = check_age_gender(video)
         First_Message["Audio test"] = Source_check_result[1]
         if Audio_check[0] != "Proceeding to next step.":
             return Audio_check[0]
-    Face_check_result = check_face_recognition(image, video)
-    First_Message["Third test - Face detection"] = Face_check_result[0]
+
     return First_Message
 
 
