@@ -299,5 +299,5 @@ iface = gr.Interface(
 
 # Launch the app
 if __name__ == "__main__":
-    iface.launch(server_name="40.66.41.130", server_port=7860, share=True)
+    iface.launch(server_name="0.0.0.0", server_port=7860, share=True)
 
