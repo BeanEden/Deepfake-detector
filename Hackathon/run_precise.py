@@ -184,16 +184,23 @@ def check_ai_generated(image, video):
         print('video detected, processing...')
         frames = extract_frames(video)
         final_prediction = None  # Initialize the final prediction variable
-
+        previous_label = None
+        consecutive_frames = 0
         for frame in frames:
             result = pipe(frame)
 
             predicted_label = result[0]['label']
             print(f"AI vs. Deepfake vs. Real Prediction: {predicted_label}")
 
-            if predicted_label in ["Deepfake", "AI-generated", "Artificial"]:
-                return ("Done",
-                        f"Deepfake detected in AI classification {predicted_label}")
+            if previous_label == predicted_label :
+                consecutive_frames +=1
+
+            else:
+                previous_label = predicted_label
+            if consecutive_frames == 6:
+                if predicted_label in ["Deepfake", "AI-generated", "Artificial"]:
+                    return ("Done",
+                            f"Deepfake detected in AI classification {predicted_label}")
         final_prediction = "Réelle"
         return ("Proceeding to next step.", f"Deepfake detection on frames completed {final_prediction}")
 
@@ -291,16 +298,16 @@ def deepfake_detector(image, video):
 
     First_Message = {"First test - Quality": Quality_check_result[1]}
     print(First_Message,"\n Proceeding to next step.")
-
+    if isinstance(video, str):
+        print("audio consulted")
+        Audio_check = check_age_gender(video)
+        First_Message["Audio test"] = Audio_check
     Source_check_result = check_ai_generated(image, video)
     First_Message["Second test - Source"] = Source_check_result[1]
     if Source_check_result[0] != "Proceeding to next step.":
         return First_Message
     print(First_Message, "\n Proceeding to next step.")
-    if isinstance(video, str):
-        print("audio consulted")
-        Audio_check = check_age_gender(video)
-        First_Message["Audio test"] = Audio_check
+
     return First_Message
 
 
